@@ -1,0 +1,16 @@
+; TunnelIt server configuration
+
+[TunnelIt]
+; Interface to listen on
+; listen_ip = 
+
+; Port to listen on
+; listen_port = 2222
+
+; Range of available ports for redirections
+; port_range = 10000:20000
+
+; Location of public and private keys
+; public_key = keys/public.key
+; private_key = keys/private.key
+
