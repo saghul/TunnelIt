@@ -91,7 +91,13 @@ class SSHAvatar(ConchUser):
         except CannotListenError:
             return 0
         else:
-            timer = reactor.callLater(ServerConfig.session_timeout, self._terminate_session)
+            timeout = ServerConfig.session_timeout
+            if timeout != 0:
+                log.msg('Session timeout set to %d seconds' % timeout)
+                timer = reactor.callLater(timeout, self._terminate_session)
+            else:
+                log.msg('Session duration is unlimited')
+                timer = None
             self.listeners[(hostToBind, portToBind)] = Listener(listener, timer)
             if portToBind == 0:
                 portToBind = listener.getHost().port
@@ -109,14 +115,15 @@ class SSHAvatar(ConchUser):
         if not listener:
             return 0
         del self.listeners[(hostToBind, portToBind)]
-        listener.disconnect_timer.cancel()
+        if listener.disconnect_timer is not None:
+            listener.disconnect_timer.cancel()
         listener.listener.stopListening()
         return 1
 
     def logout(self):
         # remove all listeners
         for listener in self.listeners.itervalues():
-            if listener.disconnect_timer.active():
+            if listener.disconnect_timer is not None and listener.disconnect_timer.active():
                 listener.disconnect_timer.cancel()
             listener.listener.stopListening()
         log.msg('avatar %s logging out (%i)' % (self.username, len(self.listeners)))

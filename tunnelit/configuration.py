@@ -18,5 +18,5 @@ class ServerConfig(ConfigSection):
     port_range = ConfigSetting(type=PortRange, value=PortRange('10000:20000'))
     public_key = 'keys/public.key'
     private_key = 'keys/private.key'
-    session_timeout = ConfigSetting(type=NonNegativeInteger, value=30)
+    session_timeout = ConfigSetting(type=NonNegativeInteger, value=600)
 
