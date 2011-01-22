@@ -101,12 +101,9 @@ class SSHAvatar(ConchUser):
             else:
                 log.msg('Session duration is unlimited')
                 timer = None
+            port_to_bind = listener.getHost().port
             self.listeners[(host_to_bind, port_to_bind)] = Listener(listener, timer)
-            if port_to_bind == 0:
-                port_to_bind = listener.getHost().port
-                return 1, struct.pack('>L', port_to_bind)
-            else:
-                return 1
+            return 1, struct.pack('>L', port_to_bind)
         finally:
             hostname = TunnelItServer().hostname
             self.conn.transport.sendDebug(">>> TunnelIt Remote Host: %s/%s" % (hostname[0], hostname[2][0]), alwaysDisplay=True)
