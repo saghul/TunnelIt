@@ -80,11 +80,14 @@ class SSHAvatar(ConchUser):
         self.conn.transport.sendDisconnect(transport.DISCONNECT_BY_APPLICATION, 'session timed out')
 
     def global_tcpip_forward(self, data):
-        hostToBind, portToBind = forwarding.unpackGlobal_tcpip_forward(data)
+        host_to_bind, port_to_bind = forwarding.unpackGlobal_tcpip_forward(data)
+        if port_to_bind != 0:
+            # Don't allow the port to bind to be specified
+            return 0
         try:
-            listener = reactor.listenTCP(portToBind, 
+            listener = reactor.listenTCP(port_to_bind, 
                                          forwarding.SSHListenForwardingFactory(self.conn,
-                                                                               (hostToBind, portToBind),
+                                                                               (host_to_bind, port_to_bind),
                                                                                forwarding.SSHListenServerForwardingChannel))
             # We don't set the 'interface' attribute because we want to listen on 0.0.0.0
             # Same effect as adding GatewayPorts yes to sshd_config
@@ -98,16 +101,16 @@ class SSHAvatar(ConchUser):
             else:
                 log.msg('Session duration is unlimited')
                 timer = None
-            self.listeners[(hostToBind, portToBind)] = Listener(listener, timer)
-            if portToBind == 0:
-                portToBind = listener.getHost().port
-                return 1, struct.pack('>L', portToBind)
+            self.listeners[(host_to_bind, port_to_bind)] = Listener(listener, timer)
+            if port_to_bind == 0:
+                port_to_bind = listener.getHost().port
+                return 1, struct.pack('>L', port_to_bind)
             else:
                 return 1
         finally:
             hostname = TunnelItServer().hostname
             self.conn.transport.sendDebug(">>> TunnelIt Remote Host: %s/%s" % (hostname[0], hostname[2][0]), alwaysDisplay=True)
-            self.conn.transport.sendDebug(">>> TunnelIt Remote Port: %s" % portToBind, alwaysDisplay=True)
+            self.conn.transport.sendDebug(">>> TunnelIt Remote Port: %s" % port_to_bind, alwaysDisplay=True)
 
     def global_cancel_tcpip_forward(self, data):
         hostToBind, portToBind = forwarding.unpackGlobal_tcpip_forward(data)
