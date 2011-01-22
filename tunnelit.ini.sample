@@ -14,3 +14,7 @@
 ; public_key = keys/public.key
 ; private_key = keys/private.key
 
+; Maximum duration of a client connection (in seconds). Client will be
+; disconnected after time elapses
+; session_duration = 600
+

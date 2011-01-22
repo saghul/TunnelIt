@@ -26,7 +26,7 @@ from twisted.cred import portal, checkers
 from twisted.cred.credentials import ISSHPrivateKey
 from twisted.conch.avatar import ConchUser
 from twisted.conch.error import ConchError, ValidPublicKey
-from twisted.conch.ssh import factory, keys, forwarding, userauth
+from twisted.conch.ssh import factory, keys, forwarding, transport, userauth
 from twisted.conch.ssh.connection import SSHConnection as _SSHConnection, MSG_CHANNEL_CLOSE
 from twisted.internet import reactor
 from twisted.internet.error import CannotListenError
@@ -64,11 +64,20 @@ class SSHFactory(factory.SSHFactory):
                }
 
 
+class Listener(object):
+    def __init__(self, listener, timer):
+        self.listener = listener
+        self.disconnect_timer = timer
+
+
 class SSHAvatar(ConchUser):
     def __init__(self, username):
         ConchUser.__init__(self)
         self.username = username
         self.listeners = {}
+
+    def _terminate_session(self):
+        self.conn.transport.sendDisconnect(transport.DISCONNECT_BY_APPLICATION, 'session timed out')
 
     def global_tcpip_forward(self, data):
         hostToBind, portToBind = forwarding.unpackGlobal_tcpip_forward(data)
@@ -82,7 +91,8 @@ class SSHAvatar(ConchUser):
         except CannotListenError:
             return 0
         else:
-            self.listeners[(hostToBind, portToBind)] = listener
+            timer = reactor.callLater(ServerConfig.session_timeout, self._terminate_session)
+            self.listeners[(hostToBind, portToBind)] = Listener(listener, timer)
             if portToBind == 0:
                 portToBind = listener.getHost().port
                 return 1, struct.pack('>L', portToBind)
@@ -99,13 +109,16 @@ class SSHAvatar(ConchUser):
         if not listener:
             return 0
         del self.listeners[(hostToBind, portToBind)]
-        listener.stopListening()
+        listener.disconnect_timer.cancel()
+        listener.listener.stopListening()
         return 1
 
     def logout(self):
         # remove all listeners
         for listener in self.listeners.itervalues():
-            listener.stopListening()
+            if listener.disconnect_timer.active():
+                listener.disconnect_timer.cancel()
+            listener.listener.stopListening()
         log.msg('avatar %s logging out (%i)' % (self.username, len(self.listeners)))
 
 
@@ -133,7 +146,10 @@ class DBPublicKeyChecker(object):
         return d
 
     def _got_userid_error(self, error, credentials):
-        return failure.Failure(ConchError('Error authenticating %s: %s' % (credentials.username, error.getErrorMessage())))
+        if not error.check(ValidPublicKey):
+            return failure.Failure(ConchError('Error authenticating %s: %s' % (credentials.username, error.getErrorMessage())))
+        else:
+            raise ValidPublicKey()
 
     def _got_keys_result(self, rows, credentials):
         if not rows:
@@ -160,6 +176,8 @@ class DBPublicKeyChecker(object):
     def _got_keys_error(self, error, credentials):
         if not error.check(ValidPublicKey):
             return failure.Failure(ConchError(error.getErrorMessage()))
+        else:
+            raise ValidPublicKey()
 
 
 class SSHRealm(object):

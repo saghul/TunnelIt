@@ -21,6 +21,13 @@ class IPAddress(str):
             raise TypeError("value must be a string")
         return str(value)
 
+class NonNegativeInteger(int):
+    def __new__(cls, value):
+        value = int(value)
+        if value < 0:
+            raise ValueError("non-negative int expected, found %d" % value)
+        return value
+
 class Port(int):
     def __new__(cls, value):
         try:
