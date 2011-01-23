@@ -18,3 +18,8 @@
 ; disconnected after time elapses
 ; session_duration = 600
 
+; URI of the DB to connect to
+; Example: sqlite:///tmp/test.sqlite
+; Example: mysql://user:password@host/db
+; db_uri = sqlite:///tmp/tunnelit.sqlite
+

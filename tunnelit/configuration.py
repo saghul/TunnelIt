@@ -19,4 +19,5 @@ class ServerConfig(ConfigSection):
     public_key = 'keys/public.key'
     private_key = 'keys/private.key'
     session_timeout = ConfigSetting(type=NonNegativeInteger, value=600)
+    db_uri = 'sqlite:///tmp/tunnelit.sqlite'
 

@@ -181,7 +181,7 @@ class TunnelItServer(object):
     __metaclass__ = Singleton
 
     def __init__(self):
-        self.db = Database('sqlite://%s' % os.path.abspath('test2.sqlite'))
+        self.db = Database(ServerConfig.db_uri)
         self.db.initialize()
         self.ssh_factory = SSHFactory()
         self.ssh_factory.portal = portal.Portal(SSHRealm())
