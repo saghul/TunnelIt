@@ -2,55 +2,78 @@
 
 # Copyright (C) 2011 Saúl Ibarra Corretgé <saghul@gmail.com>
 #
-__all__ = ['Database']
+__all__ = ['Database', 'DatabaseError']
 
-from twisted.enterprise import adbapi
-from urlparse import urlparse
+from application import log
+from application.python.util import Null, Singleton
+from sqlobject import connectionForURI, sqlhub, IntCol, SQLObject, StringCol
+from twisted.internet.threads import deferToThread
 
 
-db_modules = {
-                'mysql':    'MySQLdb',
-                'sqlite':   'sqlite3'
-             }
+def defer_to_thread(func):
+    """Decorator to run DB queries in Twisted's thread pool"""
+    def wrapper(*args, **kw):
+        return deferToThread(func, *args, **kw)
+    return wrapper
 
-def parse_db_uri(uri):
-    scheme, netloc, path, params, query, fragment = urlparse(uri)
-    if scheme not in db_modules:
-        raise ValueError('Invalid DB scheme')
-    if scheme == 'sqlite' and netloc == ':memory:':
-        raise ValueError('SQLite in-memory DB is not supported')
-    if netloc:
-        user_pass, sep, host = netloc.partition('@')
-        user, sep, password = user_pass.partition(':')
-    else:
-        user = password = host = ''
-    if scheme == 'sqlite' and netloc and not path:
-        db = netloc
-    elif not path:
-        raise ValueError('DB not specified')
-    else:
-        db = path.strip('/') if scheme != 'sqlite' else path
-    module = db_modules[scheme.lower()]
-    return module, user, password, host, db
 
+class Users(SQLObject):
+    username = StringCol()
+
+
+class UserKeys(SQLObject):
+    user_id = IntCol()
+    key = StringCol(sqlType='LONGTEXT')
+
+
+class DatabaseError(Exception): pass
 
 class Database(object):
+    __metaclass__ = Singleton
 
     def __init__(self, dburi):
-        try:
-            module, user, password, host, db = parse_db_uri(dburi)
-        except ValueError, e:
-            raise RuntimeError('Error parsing DB URI: %s' % e)
+        if ':memory:' in dburi:
+            log.warn('SQLite in-memory DB is not supported')
+            dburi = None
+        self._uri = dburi
+        if self._uri is not None:
+            try:
+                self.conn = connectionForURI(self._uri)
+                sqlhub.processConnection = self.conn
+            except Exception, e:
+                log.error('Error connection with the DB: %s' % e)
+                self.conn = Null
         else:
-            if module == 'MySQLdb':
-                self.conn = adbapi.ConnectionPool(module, user=user, passwd=password, host=host, db=db)
-            elif module == 'sqlite3':
-                self.conn = adbapi.ConnectionPool(module, database=db, check_same_thread=False)
+            self.conn = Null
 
-    def get_userid(self, username):
-        return self.conn.runQuery("SELECT id FROM users WHERE name = ? LIMIT 1", [username])
+    def _create_table(self, klass):
+        if klass._connection is Null or klass.tableExists():
+            return
+        else:
+            log.warn('Table %s does not exists. Creating it now.' % klass.sqlmeta.table)
+            saved = klass._connection.debug
+            try:
+                klass._connection.debug = True
+                klass.createTable()
+            finally:
+                klass._connection.debug = saved
 
-    def get_user_keys(self, userid):
-        return self.conn.runQuery("SELECT key FROM keys WHERE user_id = ?", [userid])
+    @defer_to_thread
+    def initialize(self):
+        if self.conn is not Null:
+            for klass in Users, UserKeys:
+                self._create_table(klass)
+
+    @defer_to_thread
+    def get_user_keys(self, username):
+        try:
+            user = Users.selectBy(username=username)[0]
+        except IndexError:
+            raise DatabaseError("User %s doesn't exist" % username)
+        else:
+            user_keys = UserKeys.selectBy(user_id=user.id)
+            if user_keys.count() == 0:
+                raise DatabaseError("No keys found for user %s" % username)
+            return [key.key for key in user_keys]
 
 

@@ -138,31 +138,14 @@ class DBPublicKeyChecker(object):
 
     def requestAvatarId(self, credentials):
         # credentials is an instance of twisted.cred.credentials.SSHPrivateKey
-        d = self.db.get_userid(credentials.username)
-        d.addCallback(self._got_userid_result, credentials)
-        d.addErrback(self._got_userid_error, credentials)
+        d = self.db.get_user_keys(credentials.username)
+        d.addCallback(self._got_result, credentials)
+        d.addErrback(self._got_error, credentials)
         return d
 
-    def _got_userid_result(self, rows, credentials):
-        if not rows:
-            return failure.Failure(ConchError("User not found"))
-        user_id = rows[0][0]
-        d = self.db.get_user_keys(user_id)
-        d.addCallback(self._got_keys_result, credentials)
-        d.addErrback(self._got_keys_error, credentials)
-        return d
-
-    def _got_userid_error(self, error, credentials):
-        if not error.check(ValidPublicKey):
-            return failure.Failure(ConchError('Error authenticating %s: %s' % (credentials.username, error.getErrorMessage())))
-        else:
-            raise ValidPublicKey()
-
-    def _got_keys_result(self, rows, credentials):
-        if not rows:
-            return failure.Failure(ConchError("No keys found"))
+    def _got_result(self, rows, credentials):
         user_keys = []
-        for key in rows[0]:
+        for key in rows:
             try:
                 user_keys.append(keys.Key.fromString(data=key).blob())
             except keys.BadKeyError:
@@ -180,11 +163,10 @@ class DBPublicKeyChecker(object):
         else:
             return failure.Failure(ConchError("Incorrect signature"))
 
-    def _got_keys_error(self, error, credentials):
+    def _got_error(self, error, credentials):
         if not error.check(ValidPublicKey):
-            return failure.Failure(ConchError(error.getErrorMessage()))
-        else:
-            raise ValidPublicKey()
+            return failure.Failure(ConchError('Error authenticating %s: %s' % (credentials.username, error.getErrorMessage())))
+        error.raiseException()
 
 
 class SSHRealm(object):
@@ -199,7 +181,8 @@ class TunnelItServer(object):
     __metaclass__ = Singleton
 
     def __init__(self):
-        self.db = Database('sqlite://test.sqlite')
+        self.db = Database('sqlite://%s' % os.path.abspath('test2.sqlite'))
+        self.db.initialize()
         self.ssh_factory = SSHFactory()
         self.ssh_factory.portal = portal.Portal(SSHRealm())
         self.ssh_factory.portal.registerChecker(DBPublicKeyChecker(self.db))
