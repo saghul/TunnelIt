@@ -164,9 +164,10 @@ class DBPublicKeyChecker(object):
             return failure.Failure(ConchError("Incorrect signature"))
 
     def _got_error(self, error, credentials):
-        if not error.check(ValidPublicKey):
+        if error.check(ValidPublicKey):
+            error.raiseException()
+        else:
             return failure.Failure(ConchError('Error authenticating %s: %s' % (credentials.username, error.getErrorMessage())))
-        error.raiseException()
 
 
 class SSHRealm(object):
