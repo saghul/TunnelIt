@@ -26,7 +26,9 @@ from twisted.cred import portal, checkers
 from twisted.cred.credentials import ISSHPrivateKey
 from twisted.conch.avatar import ConchUser
 from twisted.conch.error import ConchError, ValidPublicKey
-from twisted.conch.ssh import factory, keys, forwarding, transport, userauth
+from twisted.conch.insults.insults import ServerProtocol, TerminalProtocol
+from twisted.conch.interfaces import ISession
+from twisted.conch.ssh import factory, keys, forwarding, session, transport, userauth
 from twisted.conch.ssh.connection import SSHConnection as _SSHConnection, MSG_CHANNEL_CLOSE
 from twisted.internet import reactor
 from twisted.internet.error import CannotListenError
@@ -70,9 +72,23 @@ class Listener(object):
         self.disconnect_timer = timer
 
 
+class SSHNoSessionProtocol(TerminalProtocol):
+    def __init__(self, user_avatar):
+        pass
+
+    def connectionMade(self):
+        self.terminal.write('Interactive sessions are not allowed.')
+        self.terminal.nextLine()
+        # Calling self.terminal.loseConnection() will cause a reset, I don't like it.
+        self.terminal.transport.loseConnection()
+
+
 class SSHAvatar(ConchUser):
+    implements(ISession)
+
     def __init__(self, username):
         ConchUser.__init__(self)
+        self.channelLookup.update({'session': session.SSHSession})
         self.username = username
         self.listeners = {}
 
@@ -127,6 +143,24 @@ class SSHAvatar(ConchUser):
                 listener.disconnect_timer.cancel()
             listener.listener.stopListening()
         log.msg('avatar %s logging out (%i)' % (self.username, len(self.listeners)))
+
+    # ISession interface
+    def getPty(self, terminal, window_size, attrs):
+        pass
+
+    def openShell(self, protocol):
+        server_protocol = ServerProtocol(SSHNoSessionProtocol, self)
+        server_protocol.makeConnection(protocol)
+        protocol.makeConnection(session.wrapProtocol(server_protocol))
+
+    def execCommand(self, protocol, cmd):
+        raise NotImplementedError
+
+    def eofReceived(self):
+        pass
+
+    def closed(self):
+        pass
 
 
 class DBPublicKeyChecker(object):
