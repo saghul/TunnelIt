@@ -1,0 +1,8 @@
+
+Stuff I'd like to implement, if time allows
+-------------------------------------------
+
+- Web application for administering users (using Django)
+- Client script using Twisted Conch to display TunnelIt 'special' debug messages
+- Refactor database.py ?
+
