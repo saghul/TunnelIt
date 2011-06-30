@@ -58,11 +58,14 @@ class Database(object):
             finally:
                 klass._connection.debug = saved
 
-    @defer_to_thread
-    def initialize(self):
+    def _initialize(self):
         if self.conn is not Null:
             for klass in Users, UserKeys:
                 self._create_table(klass)
+
+    @defer_to_thread
+    def initialize(self):
+        self._initialize()
 
     @defer_to_thread
     def get_user_keys(self, username):

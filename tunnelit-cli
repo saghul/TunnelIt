@@ -1,0 +1,51 @@
+#!/usr/bin/env python
+# coding=utf8
+
+# Copyright (C) 2011 Saúl Ibarra Corretgé <saghul@gmail.com>
+#
+
+import sys
+from optparse import OptionParser
+from twisted.conch.ssh import keys
+
+from tunnelit import __version__
+from tunnelit.configuration import ServerConfig
+from tunnelit.database import Database, Users, UserKeys
+
+
+def main():
+    parser = OptionParser(version='%%prog %s' % __version__)
+    parser.add_option('-u', '--username', dest='username', help='Username to create')
+    parser.add_option('-k', '--key', dest='key', help='File containing public key', metavar='File')
+    (options, args) = parser.parse_args()
+
+    if not (options.username and options.key):
+        print 'Both username and key file need to be specified'
+        sys.exit(1)
+
+    try:
+        key_data = file(options.key).read()
+    except IOError:
+        print 'Could not open specified key file'
+        sys.exit(1)
+
+    try:
+        keys.Key.fromString(data=key_data)
+    except keys.BadKeyError:
+        print 'Key file contains bogus data'
+        sys.exit(1)
+
+    db = Database(ServerConfig.db_uri)
+    db._initialize()
+    try:
+        user = Users.selectBy(username=options.username)[0]
+    except IndexError:
+        user = Users(username=options.username)
+    key = UserKeys(user_id=user.id, key=key_data)
+    print 'Done!'
+
+
+if __name__ == '__main__':
+    main()
+
+
