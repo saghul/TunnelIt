@@ -5,7 +5,8 @@
 __all__ = ['Database', 'DatabaseError']
 
 from application import log
-from application.python.util import Null, Singleton
+from application.python import Null
+from application.python.types import Singleton
 from sqlobject import connectionForURI, sqlhub, IntCol, SQLObject, StringCol
 from twisted.internet.threads import deferToThread
 

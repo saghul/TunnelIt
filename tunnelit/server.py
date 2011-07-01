@@ -10,7 +10,7 @@ import socket
 import struct
 
 from application import log
-from application.python.util import Singleton
+from application.python.types import Singleton
 from Crypto.PublicKey import RSA
 from zope.interface import implements
 
